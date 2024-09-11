@@ -1,0 +1,59 @@
+name: Pull Request build and deploy
+'on':
+  pull_request:
+    branches:
+      - master
+env:
+  REPO_URL: 202793567437.dkr.ecr.eu-west-1.amazonaws.com/sbf.app.purchasing.frontend
+  REPO_NAME: sbf.app.purchasing.frontend
+jobs:
+  deploy-dev:
+    runs-on: ubuntu-latest
+    environment: Development
+    steps:
+      - run: sudo apt update && sudo apt install git jq -y
+      - uses: actions/checkout@v4
+      - name: Get current date
+        id: date
+        run: 'echo "::set-output name=date::$(date +''%Y%m%d%s'')"'
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: '${{ secrets.AWS_DEPLOY_ECR_ADMIN_ACCESS_KEY_ID }}'
+          aws-secret-access-key: '${{ secrets.AWS_DEPLOY_ECR_ADMIN_SECRET }}'
+          aws-region: '${{ secrets.AWS_DEPLOY_ECR_ADMIN_REGION }}'
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+      - uses: werf/actions/build@v1.2
+        env:
+          WERF_REPO: '${{ env.REPO_URL }}'
+          WERF_FINAL_REPO: '${{ env.REPO_URL }}'
+          WERF_REPORT_FORMAT: json
+          WERF_REPORT_PATH: ./report.json
+          WERF_CONFIG: .werf/werf-development-sbf-app-purchasing-frontend.yaml
+          WERF_GITERMINISM_CONFIG: .werf/werf-giterminism.yaml
+          AWS_EVENT_BRIDGE_USER_ACCESS_KEY: '${{ secrets.AWS_EVENT_BRIDGE_USER_ACCESS_KEY }}'
+          AWS_EVENT_BRIDGE_USER_REGION: '${{ secrets.AWS_EVENT_BRIDGE_USER_REGION }}'
+          AWS_EVENT_BRIDGE_USER_SECRET: '${{ secrets.AWS_EVENT_BRIDGE_USER_SECRET }}'
+          PACKAGE_READ_TOKEN: '${{ secrets.PACKAGE_READ_TOKEN }}'
+      - id: get_images
+        run: >
+          image=$(jq -r '.Images["sbf-app-purchasing-frontend"].DockerImageName'
+          ./report.json)
+
+          echo "::set-output name=image::$image"
+      - id: get_tag
+        run: >
+          tag=$(jq -r '.Images["sbf-app-purchasing-frontend"].DockerTag'
+          ./report.json)
+
+          echo "::set-output name=tag::$tag"
+      - name: Retag image
+        uses: abronin/ecr-retag-action@v1
+        with:
+          repository: '${{ env.REPO_NAME }}'
+          tag: '${{steps.get_tag.outputs.tag}}'
+          new-tags: >-
+            sbf-app-purchasing-frontend-development-${{ steps.date.outputs.date
+            }}
