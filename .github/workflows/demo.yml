@@ -24,7 +24,7 @@ jobs:
             -H "Accept: application/vnd.github.v3+json" \
             -H "Authorization: token PurchasingCRM" \
             https://api.github.com/repos/SOG-TAK/Playwright-Automation-Purchasing-CRM-flow/dispatches \
-            -d '{"ref":"main"}'
+            -d '{"ref":"main"}' 
             
             
             
